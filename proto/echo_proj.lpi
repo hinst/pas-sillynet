@@ -10,7 +10,7 @@
       </Flags>
       <SessionStorage Value="InProjectDir"/>
       <MainUnit Value="0"/>
-      <Title Value="echo"/>
+      <Title Value="echo_proj"/>
       <UseAppBundle Value="False"/>
       <ResourceType Value="res"/>
     </General>
@@ -31,22 +31,28 @@
         <FormatVersion Value="1"/>
       </local>
     </RunParams>
-    <Units Count="1">
+    <Units Count="2">
       <Unit0>
-        <Filename Value="echo.lpr"/>
+        <Filename Value="echo_proj.lpr"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="echo"/>
+        <UnitName Value="echo_proj"/>
       </Unit0>
+      <Unit1>
+        <Filename Value="..\src\sillynetworkingu.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="SillyNetworkingU"/>
+      </Unit1>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
     <Version Value="11"/>
     <PathDelim Value="\"/>
     <Target>
-      <Filename Value="echo"/>
+      <Filename Value="echo_proj"/>
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
+      <OtherUnitFiles Value="..\src"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
   </CompilerOptions>
