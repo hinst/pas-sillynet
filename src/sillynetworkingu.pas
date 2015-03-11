@@ -85,10 +85,10 @@ type
     ConnectionActiveF: Boolean;
     procedure ReaderRoutine(aThread: TMethodThread);
     procedure WriterRoutine(aThread: TMethodThread);
-    procedure ConnectForward;
   public
     TargetAddress: string;
     TargetPort: Word;
+    ThreadIdleInterval: Integer;
     property ConnectionActive: Boolean read ConnectionActiveF;
     constructor Create;
     procedure Start;
@@ -98,27 +98,13 @@ type
 
 const
   DefaultMessageBufferLimit = 10 * 1000;
+  DefaultThreadIdleInterval = 100;
 
 implementation
 
 procedure TClient.ReaderRoutine(aThread: TMethodThread);
-begin
-  while not aThread.Terminated do
-  begin
-    if not ConnectionActive then
-      ConnectForward;
-  end;
-end;
 
-procedure TClient.WriterRoutine(aThread: TMethodThread);
-begin
-  while not aThread.Terminated do
-  begin
-
-  end;
-end;
-
-procedure TClient.ConnectForward;
+procedure ConnectForward;
 begin
   if (TargetAddress <> '') and (TargetPort <> 0) then
   begin
@@ -130,6 +116,30 @@ begin
       Socket.CloseSocket;
       ConnectionActiveF := False;
     end;
+  end;
+end;
+
+procedure ReadForward;
+begin
+
+end;
+
+begin
+  while not aThread.Terminated do
+  begin
+    if not ConnectionActive then
+      ConnectForward;
+    ReadForward;
+    SysUtils.Sleep(ThreadIdleInterval);
+  end;
+  ReadForward;
+end;
+
+procedure TClient.WriterRoutine(aThread: TMethodThread);
+begin
+  while not aThread.Terminated do
+  begin
+
   end;
 end;
 
