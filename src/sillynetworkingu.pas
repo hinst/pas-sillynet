@@ -32,9 +32,65 @@ type
     function TryEnter: Boolean;
     procedure Enter;
     procedure Leave;
+    destructor Destroy; override;
+  end;
+
+  TMemoryStreamDynArray = array of TMemoryStream;
+
+  TMessageQueue = class
+  private
+    Messages: TMemoryStreamDynArray;
+    CountOfMessages: Integer;
+    Locker: TRTLCriticalSection;
+  public
+    constructor Create(aCountOfMessagesLimit: Integer);
+    destructor Destroy; override;
+  end;
+
+  TMessageReceiver = class
+  private
+    SizePos: Byte;
+    ExpectedSize: Int64;
+    MemoryF: TMemoryStream;
+  public
+    procedure Write(aByte: byte);
+    function Ready: Boolean;
+    property Memory: TMemoryStream read MemoryF;
+  end;
+
+  TClient = class
+  private
+    MessageReceiver: TMessageReceiver;
   end;
 
 implementation
+
+constructor TMessageQueue.Create(aCountOfMessagesLimit: Integer);
+begin
+  inherited Create;
+  InitCriticalSection(Locker);
+  SetLength(Messages, aCountOfMessagesLimit);
+end;
+
+destructor TMessageQueue.Destroy;
+begin
+  DoneCriticalsection(Locker);
+  inherited Destroy;
+end;
+
+procedure TMessageReceiver.Write(aByte: byte);
+begin
+  if SizePos < SizeOf(ExpectedSize) then
+  begin
+    ExpectedSize := ExpectedSize + aByte shl (SizePos * 8);
+    Inc(SizePos);
+  end;
+end;
+
+function TMessageReceiver.Ready: Boolean;
+begin
+  result := (SizePos = SizeOf(ExpectedSize)) and (MemoryF.Size <= ExpectedSize);
+end;
 
 function TSharedObject.GetClassName: string;
 begin
@@ -59,6 +115,11 @@ end;
 procedure TCriticalSection.Leave;
 begin
   LeaveCriticalsection(InternalCriticalSection);
+end;
+
+destructor TCriticalSection.Destroy;
+begin
+  inherited Destroy;
 end;
 
 end.
