@@ -69,6 +69,7 @@ type
   private
     Method: TMethodThreadMethod;
   public
+    property Terminated;
     constructor Create(aMethod: TMethodThreadMethod);
     procedure Execute; override;
   end;
@@ -81,11 +82,14 @@ type
     Socket: TTCPBlockSocket;
     ReaderThread: TMethodThread;
     WriterThread: TMethodThread;
+    ConnectionActiveF: Boolean;
     procedure ReaderRoutine(aThread: TMethodThread);
     procedure WriterRoutine(aThread: TMethodThread);
+    procedure ConnectForward;
   public
     TargetAddress: string;
     TargetPort: Word;
+    property ConnectionActive: Boolean read ConnectionActiveF;
     constructor Create;
     procedure Start;
     procedure Push(aMessage: TMemoryStream);
@@ -99,12 +103,31 @@ implementation
 
 procedure TClient.ReaderRoutine(aThread: TMethodThread);
 begin
-
+  while not aThread.Terminated do
+  begin
+    if not ConnectionActive then
+      ConnectForward;
+  end;
 end;
 
 procedure TClient.WriterRoutine(aThread: TMethodThread);
 begin
 
+end;
+
+procedure TClient.ConnectForward;
+begin
+  if (TargetAddress <> '') and (TargetPort <> 0) then
+  begin
+    Socket.Connect(Address, IntToStr(Port));
+    if Socket.LastError = 0 then
+      ConnectionActiveF := True
+    else
+    begin
+      Socket.CloseSocket;
+      ConnectionActive := False;
+    end;
+  end;
 end;
 
 constructor TClient.Create;
