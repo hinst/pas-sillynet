@@ -44,6 +44,7 @@ type
     Locker: TRTLCriticalSection;
   public
     constructor Create(aCountOfMessagesLimit: Integer);
+    function Push(aMessage: TMemoryStream): Boolean;
     destructor Destroy; override;
   end;
 
@@ -70,6 +71,18 @@ begin
   inherited Create;
   InitCriticalSection(Locker);
   SetLength(Messages, aCountOfMessagesLimit);
+end;
+
+function TMessageQueue.Push(aMessage: TMemoryStream): Boolean;
+begin
+  EnterCriticalsection(Locker);
+  result := self.CountOfMessages < Length(self.Messages);
+  if result then
+  begin
+    self.Messages[self.CountOfMessages] := aMessage;
+    Inc(self.CountOfMessages);
+  end;
+  LeaveCriticalsection(Locker);
 end;
 
 destructor TMessageQueue.Destroy;
