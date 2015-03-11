@@ -93,6 +93,7 @@ type
     constructor Create;
     procedure Start;
     procedure Push(aMessage: TMemoryStream);
+    function Pop: TMemoryStream;
     destructor Destroy; override;
   end;
 
@@ -160,6 +161,11 @@ end;
 procedure TClient.Push(aMessage: TMemoryStream);
 begin
   Outgoing.Push(aMessage);
+end;
+
+function TClient.Pop: TMemoryStream;
+begin
+  result := Incoming.Pop;
 end;
 
 destructor TClient.Destroy;
