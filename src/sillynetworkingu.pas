@@ -112,20 +112,23 @@ end;
 
 procedure TClient.WriterRoutine(aThread: TMethodThread);
 begin
+  while not aThread.Terminated do
+  begin
 
+  end;
 end;
 
 procedure TClient.ConnectForward;
 begin
   if (TargetAddress <> '') and (TargetPort <> 0) then
   begin
-    Socket.Connect(Address, IntToStr(Port));
+    Socket.Connect(TargetAddress, IntToStr(TargetPort));
     if Socket.LastError = 0 then
       ConnectionActiveF := True
     else
     begin
       Socket.CloseSocket;
-      ConnectionActive := False;
+      ConnectionActiveF := False;
     end;
   end;
 end;
@@ -159,7 +162,9 @@ end;
 
 constructor TMethodThread.Create(aMethod: TMethodThreadMethod);
 begin
-  inherited Create(False);
+  inherited Create(True);
+  self.Method := aMethod;
+  Start;
 end;
 
 procedure TMethodThread.Execute;
