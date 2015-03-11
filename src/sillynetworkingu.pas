@@ -5,7 +5,7 @@ unit SillyNetworkingU;
 interface
 
 uses
-  Classes, SysUtils;
+  Classes, SysUtils, blcksock;
 
 type
 
@@ -61,19 +61,55 @@ type
     property Memory: TMemoryStream read MemoryF;
   end;
 
+  TMethodThread = class;
+
+  TMethodThreadMethod = procedure(aThread: TMethodThread);
+
+  TMethodThread = class(TThread)
+  private
+    Method: TMethodThreadMethod;
+  public
+    constructor Create(aMethod: TMethodThreadMethod);
+    procedure Execute; override;
+  end;
+
   TClient = class
   private
     MessageReceiver: TMessageReceiver;
+    MessageQueue: TMessageQueue;
+    Socket: TTCPBlockSocket;
+  public
+    constructor Create;
   end;
 
+const
+  DefaultMessageBufferLimit = 10 * 1000;
+
 implementation
+
+constructor TClient.Create;
+begin
+  inherited Create;
+  MessageReceiver := TMessageReceiver.Create;
+  MessageQueue := TMessageQueue.Create(DefaultMessageBufferLimit);
+end;
+
+constructor TMethodThread.Create(aMethod: TMethodThreadMethod);
+begin
+  inherited Create(False);
+end;
+
+procedure TMethodThread.Execute;
+begin
+  Method(self);
+end;
 
 procedure TMessageQueue.Shrink1;
 var
   i: Integer;
 begin
   for i := 0 to Count - 2 do
-    result[i] := result[i + 1];
+    self.MessageArray[i] := self.MessageArray[i + 1];
   Dec(Count);
 end;
 
