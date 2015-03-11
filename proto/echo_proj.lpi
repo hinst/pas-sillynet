@@ -35,7 +35,6 @@
       <Unit0>
         <Filename Value="echo_proj.lpr"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="echo_proj"/>
       </Unit0>
       <Unit1>
         <Filename Value="..\src\sillynetworkingu.pas"/>

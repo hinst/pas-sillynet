@@ -39,12 +39,14 @@ type
 
   TMessageQueue = class
   private
-    Messages: TMemoryStreamDynArray;
-    CountOfMessages: Integer;
+    MessageArray: TMemoryStreamDynArray;
+    Count: Integer;
     Locker: TRTLCriticalSection;
+    procedure Shrink1;
   public
     constructor Create(aCountOfMessagesLimit: Integer);
     function Push(aMessage: TMemoryStream): Boolean;
+    function Pop: TMemoryStream;
     destructor Destroy; override;
   end;
 
@@ -66,21 +68,42 @@ type
 
 implementation
 
+procedure TMessageQueue.Shrink1;
+var
+  i: Integer;
+begin
+  for i := 0 to Count - 2 do
+    result[i] := result[i + 1];
+  Dec(Count);
+end;
+
 constructor TMessageQueue.Create(aCountOfMessagesLimit: Integer);
 begin
   inherited Create;
   InitCriticalSection(Locker);
-  SetLength(Messages, aCountOfMessagesLimit);
+  SetLength(MessageArray, aCountOfMessagesLimit);
 end;
 
 function TMessageQueue.Push(aMessage: TMemoryStream): Boolean;
 begin
   EnterCriticalsection(Locker);
-  result := self.CountOfMessages < Length(self.Messages);
+  result := self.Count < Length(self.MessageArray);
   if result then
   begin
-    self.Messages[self.CountOfMessages] := aMessage;
-    Inc(self.CountOfMessages);
+    self.MessageArray[self.Count] := aMessage;
+    Inc(self.Count);
+  end;
+  LeaveCriticalsection(Locker);
+end;
+
+function TMessageQueue.Pop: TMemoryStream;
+begin
+  result := nil;
+  EnterCriticalsection(Locker);
+  if self.Count > 0 then
+  begin
+    result := self.MessageArray[0];
+    Shrink1;
   end;
   LeaveCriticalsection(Locker);
 end;
