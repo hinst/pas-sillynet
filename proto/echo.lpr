@@ -1,0 +1,5 @@
+program echo;
+
+begin
+end.
+
