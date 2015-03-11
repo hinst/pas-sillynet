@@ -63,7 +63,7 @@ type
 
   TMethodThread = class;
 
-  TMethodThreadMethod = procedure(aThread: TMethodThread);
+  TMethodThreadMethod = procedure(aThread: TMethodThread) of object;
 
   TMethodThread = class(TThread)
   private
@@ -76,10 +76,20 @@ type
   TClient = class
   private
     MessageReceiver: TMessageReceiver;
-    MessageQueue: TMessageQueue;
+    Incoming: TMessageQueue;
+    Outgoing: TMessageQueue;
     Socket: TTCPBlockSocket;
+    ReaderThread: TMethodThread;
+    WriterThread: TMethodThread;
+    procedure ReaderRoutine(aThread: TMethodThread);
+    procedure WriterRoutine(aThread: TMethodThread);
   public
+    TargetAddress: string;
+    TargetPort: Word;
     constructor Create;
+    procedure Start;
+    procedure Push(aMessage: TMemoryStream);
+    destructor Destroy; override;
   end;
 
 const
@@ -87,11 +97,41 @@ const
 
 implementation
 
+procedure TClient.ReaderRoutine(aThread: TMethodThread);
+begin
+
+end;
+
+procedure TClient.WriterRoutine(aThread: TMethodThread);
+begin
+
+end;
+
 constructor TClient.Create;
 begin
   inherited Create;
   MessageReceiver := TMessageReceiver.Create;
-  MessageQueue := TMessageQueue.Create(DefaultMessageBufferLimit);
+  Incoming := TMessageQueue.Create(DefaultMessageBufferLimit);
+  Outgoing := TMessageQueue.Create(DefaultMessageBufferLimit);
+end;
+
+procedure TClient.Start;
+begin
+  ReaderThread := TMethodThread.Create(@ReaderRoutine);
+  WriterThread := TMethodThread.Create(@WriterRoutine);
+end;
+
+procedure TClient.Push(aMessage: TMemoryStream);
+begin
+  Outgoing.Push(aMessage);
+end;
+
+destructor TClient.Destroy;
+begin
+  Outgoing.Free;
+  Incoming.Free;
+  MessageReceiver.Free;
+  inherited Destroy;
 end;
 
 constructor TMethodThread.Create(aMethod: TMethodThreadMethod);
