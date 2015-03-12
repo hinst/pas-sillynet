@@ -56,9 +56,12 @@ type
     ExpectedSize: Int64;
     MemoryF: TMemoryStream;
   public
+    constructor Create;
     procedure Write(aByte: byte);
     function Ready: Boolean;
+    procedure Reset;
     property Memory: TMemoryStream read MemoryF;
+    destructor Destroy; override;
   end;
 
   TMethodThread = class;
@@ -120,9 +123,20 @@ begin
   end;
 end;
 
-procedure ReadForward;
+function Read(var aByte: Byte): Boolean;
 begin
+  aByte := self.Socket.RecvByte(1);
+  result := self.Socket.LastError = 0;
+end;
 
+procedure ReadForward;
+var
+  byteL: Byte;
+begin
+  while ConnectionActive and Read(byteL) do
+  begin
+    MessageReceiver.Write(byteL);
+  end;
 end;
 
 begin
@@ -234,18 +248,38 @@ begin
   inherited Destroy;
 end;
 
+constructor TMessageReceiver.Create;
+begin
+  inherited Create;
+  MemoryF := TMemoryStream.Create;
+end;
+
 procedure TMessageReceiver.Write(aByte: byte);
 begin
   if SizePos < SizeOf(ExpectedSize) then
   begin
     ExpectedSize := ExpectedSize + aByte shl (SizePos * 8);
     Inc(SizePos);
+  end else
+  begin
   end;
 end;
 
 function TMessageReceiver.Ready: Boolean;
 begin
   result := (SizePos = SizeOf(ExpectedSize)) and (MemoryF.Size <= ExpectedSize);
+end;
+
+procedure TMessageReceiver.Reset;
+begin
+  SizePos := 0;
+  MemoryF := TMemoryStream.Create;
+end;
+
+destructor TMessageReceiver.Destroy;
+begin
+  MemoryF.Free;
+  inherited Destroy;
 end;
 
 function TSharedObject.GetClassName: string;
