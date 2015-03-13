@@ -5,7 +5,7 @@ unit SillyNetworkingU;
 interface
 
 uses
-  Classes, SysUtils, blcksock, synsock;
+  Classes, windows, SysUtils, blcksock, synsock;
 
 type
 
@@ -89,6 +89,7 @@ type
     ReaderThread: TMethodThread;
     WriterThread: TMethodThread;
     ConnectionActiveF: Boolean;
+    KeepAliveInterval: Cardinal;
     procedure ReaderRoutine(aThread: TMethodThread);
     procedure WriterRoutine(aThread: TMethodThread);
     function CheckConnectionActive: Boolean;
@@ -194,6 +195,9 @@ end;
 
 procedure TClient.WriterRoutine(aThread: TMethodThread);
 
+var
+  lastKeepAliveMoment: QWord;
+
   procedure WriteMessage(aMessage: TMemoryStream);
   var
     sizeData: TInt64MemoryBlock;
@@ -201,6 +205,24 @@ procedure TClient.WriterRoutine(aThread: TMethodThread);
     sizeData := Int64ToMemoryBlock(aMessage.Size);
     Socket.SendBuffer(@sizeData[0], SizeOf(Int64));
     Socket.SendBuffer(aMessage.Memory, Integer(aMessage.Size));
+  end;
+
+  procedure SendKeepAliive;
+  var
+    emptyMessage: TMemoryStream;
+  begin
+    emptyMessage := TMemoryStream.Create;
+    WriteMessage(emptyMessage);
+    emptyMessage.Free;
+  end;
+
+  procedure SendKeepAliveIfRequired;
+  begin
+    if KeepAliveInterval < GetTickCount64 - lastKeepAliveMoment then
+    begin
+      SendKeepAliive;
+      lastKeepAliveMoment := GetTickCount64;
+    end;
   end;
 
   procedure WriteForward;
@@ -370,22 +392,22 @@ end;
 
 constructor TCriticalSection.Create;
 begin
-  InitCriticalSection(InternalCriticalSection);
+  System.InitCriticalSection(InternalCriticalSection);
 end;
 
 function TCriticalSection.TryEnter: Boolean;
 begin
-  result := TryEnterCriticalsection(InternalCriticalSection) <> 0;
+  result := System.TryEnterCriticalsection(InternalCriticalSection) <> 0;
 end;
 
 procedure TCriticalSection.Enter;
 begin
-  EnterCriticalsection(InternalCriticalSection);
+  System.EnterCriticalsection(InternalCriticalSection);
 end;
 
 procedure TCriticalSection.Leave;
 begin
-  LeaveCriticalsection(InternalCriticalSection);
+  System.LeaveCriticalsection(InternalCriticalSection);
 end;
 
 destructor TCriticalSection.Destroy;
