@@ -5,7 +5,7 @@ unit SillyNetworkingU;
 interface
 
 uses
-  Classes, SysUtils, blcksock;
+  Classes, SysUtils, types, blcksock;
 
 type
 
@@ -106,6 +106,17 @@ const
 
 implementation
 
+function Int64ToByteArray(aX: Int64): TByteDynArray;
+var
+  i: Byte;
+begin
+  SetLength(result, SizeOf(aX));
+  for i := 0 to SizeOf(aX) - 1 do
+  begin
+    result[i] := (aX shr (i * 8)) and $FF;
+  end;
+end;
+
 procedure TClient.ReaderRoutine(aThread: TMethodThread);
 
   procedure ConnectForward;
@@ -167,11 +178,32 @@ begin
 end;
 
 procedure TClient.WriterRoutine(aThread: TMethodThread);
-begin
-  while not aThread.Terminated do
+
+  procedure WriteMessage(aMessage: TMemoryStream);
   begin
 
   end;
+
+  procedure WriteForward;
+  var
+    outgoingMessage: TMemoryStream;
+  begin
+    while self.ConnectionActive do
+    begin
+      outgoingMessage := Outgoing.Pop;
+      if outgoingMessage <> nil then
+      begin
+      end;
+    end;
+  end;
+
+begin
+  while not aThread.Terminated do
+  begin
+    WriteForward;
+    SysUtils.Sleep(ThreadIdleInterval);
+  end;
+  WriteForward;
 end;
 
 constructor TClient.Create;
