@@ -108,36 +108,52 @@ implementation
 
 procedure TClient.ReaderRoutine(aThread: TMethodThread);
 
-procedure ConnectForward;
-begin
-  if (TargetAddress <> '') and (TargetPort <> 0) then
+  procedure ConnectForward;
   begin
-    Socket.Connect(TargetAddress, IntToStr(TargetPort));
-    if Socket.LastError = 0 then
-      ConnectionActiveF := True
-    else
+    if (TargetAddress <> '') and (TargetPort <> 0) then
     begin
-      Socket.CloseSocket;
-      ConnectionActiveF := False;
+      Socket.Connect(TargetAddress, IntToStr(TargetPort));
+      if Socket.LastError = 0 then
+        ConnectionActiveF := True
+      else
+      begin
+        Socket.CloseSocket;
+        ConnectionActiveF := False;
+      end;
     end;
   end;
-end;
 
-function Read(var aByte: Byte): Boolean;
-begin
-  aByte := self.Socket.RecvByte(1);
-  result := self.Socket.LastError = 0;
-end;
-
-procedure ReadForward;
-var
-  byteL: Byte;
-begin
-  while ConnectionActive and Read(byteL) do
+  function Read(out aByte: Byte): Boolean;
   begin
-    MessageReceiver.Write(byteL);
+    aByte := self.Socket.RecvByte(1);
+    result := self.Socket.LastError = 0;
   end;
-end;
+
+  procedure ReadForward;
+
+    // MessageReceiver.Ready must be = True.
+    procedure ExtractMessage;
+    var
+      pushResult: Boolean;
+      incomingMessage: TMemoryStream;
+    begin
+      incomingMessage := MessageReceiver.Memory;
+      MessageReceiver.Reset;
+      pushResult := Incoming.Push(incomingMessage);
+      if not pushResult then
+        incomingMessage.Free;
+    end;
+
+  var
+    byteL: Byte;
+  begin
+    while ConnectionActive and Read(byteL) do
+    begin
+      MessageReceiver.Write(byteL);
+      if MessageReceiver.Ready then
+        ExtractMessage;
+    end;
+  end;
 
 begin
   while not aThread.Terminated do
@@ -260,8 +276,10 @@ begin
   begin
     ExpectedSize := ExpectedSize + aByte shl (SizePos * 8);
     Inc(SizePos);
-  end else
+  end
+  else
   begin
+    MemoryF.WriteByte(aByte);
   end;
 end;
 
