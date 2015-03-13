@@ -5,7 +5,7 @@ unit SillyNetworkingU;
 interface
 
 uses
-  Classes, SysUtils, types, blcksock;
+  Classes, SysUtils, blcksock, synsock;
 
 type
 
@@ -91,6 +91,7 @@ type
     ConnectionActiveF: Boolean;
     procedure ReaderRoutine(aThread: TMethodThread);
     procedure WriterRoutine(aThread: TMethodThread);
+    function CheckConnectionActive: Boolean;
   public
     TargetAddress: string;
     TargetPort: Word;
@@ -174,6 +175,9 @@ procedure TClient.ReaderRoutine(aThread: TMethodThread);
       MessageReceiver.Write(byteL);
       if MessageReceiver.Ready then
         ExtractMessage;
+      ConnectionActiveF := CheckConnectionActive;
+      if not ConnectionActiveF then
+        Socket.CloseSocket;
     end;
   end;
 
@@ -210,7 +214,12 @@ procedure TClient.WriterRoutine(aThread: TMethodThread);
       begin
         WriteMessage(outgoingMessage);
         outgoingMessage.Free;
-      end;
+        ConnectionActiveF := CheckConnectionActive;
+        if not ConnectionActiveF then
+          Socket.CloseSocket;
+      end
+      else
+        break;
     end;
   end;
 
@@ -221,6 +230,11 @@ begin
     SysUtils.Sleep(ThreadIdleInterval);
   end;
   WriteForward;
+end;
+
+function TClient.CheckConnectionActive: Boolean;
+begin
+  result := (Socket.LastError = 0) or (Socket.LastError = WSAETIMEDOUT);
 end;
 
 constructor TClient.Create;
@@ -329,9 +343,7 @@ begin
       ExpectedSize := MemoryBlockToInt64(ExpectedSizeData);
   end
   else
-  begin
     MemoryF.WriteByte(aByte);
-  end;
 end;
 
 function TMessageReceiver.Ready: Boolean;
