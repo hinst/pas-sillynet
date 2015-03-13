@@ -50,9 +50,12 @@ type
     destructor Destroy; override;
   end;
 
+  TInt64MemoryBlock = array[0..7] of byte;
+
   TMessageReceiver = class
   private
-    SizePos: Byte;
+    ExpectedSizeDataPosition: Byte;
+    ExpectedSizeData: TInt64MemoryBlock;
     ExpectedSize: Int64;
     MemoryF: TMemoryStream;
   public
@@ -106,15 +109,23 @@ const
 
 implementation
 
-function Int64ToByteArray(aX: Int64): TByteDynArray;
+function Int64ToMemoryBlock(aX: Int64): TInt64MemoryBlock;
 var
   i: Byte;
 begin
-  SetLength(result, SizeOf(aX));
   for i := 0 to SizeOf(aX) - 1 do
   begin
     result[i] := (aX shr (i * 8)) and $FF;
   end;
+end;
+
+function MemoryBlockToInt64(aBlock: TInt64MemoryBlock): Int64;
+var
+  i: Byte;
+begin
+  result := 0;
+  for i := 0 to SizeOf(result) - 1 do
+    result := result + (aBlock[i] shl (i * 8));
 end;
 
 procedure TClient.ReaderRoutine(aThread: TMethodThread);
@@ -180,8 +191,12 @@ end;
 procedure TClient.WriterRoutine(aThread: TMethodThread);
 
   procedure WriteMessage(aMessage: TMemoryStream);
+  var
+    sizeData: TInt64MemoryBlock;
   begin
-
+    sizeData := Int64ToMemoryBlock(aMessage.Size);
+    Socket.SendBuffer(@sizeData[0], SizeOf(Int64));
+    Socket.SendBuffer(aMessage.Memory, Integer(aMessage.Size));
   end;
 
   procedure WriteForward;
@@ -193,6 +208,8 @@ procedure TClient.WriterRoutine(aThread: TMethodThread);
       outgoingMessage := Outgoing.Pop;
       if outgoingMessage <> nil then
       begin
+        WriteMessage(outgoingMessage);
+        outgoingMessage.Free;
       end;
     end;
   end;
@@ -304,10 +321,12 @@ end;
 
 procedure TMessageReceiver.Write(aByte: byte);
 begin
-  if SizePos < SizeOf(ExpectedSize) then
+  if ExpectedSizeDataPosition < SizeOf(ExpectedSize) then
   begin
-    ExpectedSize := ExpectedSize + aByte shl (SizePos * 8);
-    Inc(SizePos);
+    ExpectedSizeData[ExpectedSizeDataPosition] := aByte;
+    Inc(ExpectedSizeDataPosition);
+    if ExpectedSizeDataPosition = SizeOf(ExpectedSize) then
+      ExpectedSize := MemoryBlockToInt64(ExpectedSizeData);
   end
   else
   begin
@@ -317,12 +336,12 @@ end;
 
 function TMessageReceiver.Ready: Boolean;
 begin
-  result := (SizePos = SizeOf(ExpectedSize)) and (MemoryF.Size <= ExpectedSize);
+  result := (ExpectedSizeDataPosition = SizeOf(ExpectedSize)) and (MemoryF.Size <= ExpectedSize);
 end;
 
 procedure TMessageReceiver.Reset;
 begin
-  SizePos := 0;
+  ExpectedSizeDataPosition := 0;
   MemoryF := TMemoryStream.Create;
 end;
 
