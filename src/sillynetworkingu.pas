@@ -108,6 +108,7 @@ type
 const
   DefaultMessageBufferLimit = 10 * 1000;
   DefaultThreadIdleInterval = 100;
+  DefaultKeepAliveInterval = 3000;
 
 implementation
 
@@ -262,6 +263,8 @@ end;
 constructor TClient.Create;
 begin
   inherited Create;
+  KeepAliveInterval := DefaultKeepAliveInterval;
+  ThreadIdleInterval := DefaultThreadIdleInterval;
   MessageReceiver := TMessageReceiver.Create;
   Incoming := TMessageQueue.Create(DefaultMessageBufferLimit);
   Outgoing := TMessageQueue.Create(DefaultMessageBufferLimit);
@@ -285,6 +288,18 @@ end;
 
 destructor TClient.Destroy;
 begin
+  if WriterThread <> nil then
+  begin
+    WriterThread.Terminate;
+    WriterThread.WaitFor;
+    WriterThread.Free;
+  end;
+  if ReaderThread <> nil then
+  begin
+    ReaderThread.Terminate;
+    ReaderThread.WaitFor;
+    ReaderThread.Free;
+  end;
   Outgoing.Free;
   Incoming.Free;
   MessageReceiver.Free;
