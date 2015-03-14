@@ -100,8 +100,26 @@ type
     property ConnectionActive: Boolean read ConnectionActiveF;
     constructor Create;
     procedure Start;
+    procedure Stop;
     procedure Push(aMessage: TMemoryStream);
     function Pop: TMemoryStream;
+    destructor Destroy; override;
+  end;
+
+  // For testing purposes.
+  TEchoClient = class
+  private
+    Client: TClient;
+    EchoThread: TMethodThread;
+    procedure SetTargetAddress(a: string);
+    procedure SetTargetPort(a: Word);
+    procedure EchoThreadRoutine(a: TMethodThread);
+  public
+    property TargetAddress: string write SetTargetAddress;
+    property TargetPort: Word write SetTargetPort;
+    constructor Create;
+    procedure Start;
+    procedure Stop;
     destructor Destroy; override;
   end;
 
@@ -129,6 +147,65 @@ begin
   result := 0;
   for i := 0 to SizeOf(result) - 1 do
     result := result + (aBlock[i] shl (i * 8));
+end;
+
+{ TEchoClient }
+
+procedure TEchoClient.SetTargetAddress(a: string);
+begin
+  Client.TargetAddress := a;
+end;
+
+procedure TEchoClient.SetTargetPort(a: Word);
+begin
+  Client.TargetPort := a;
+end;
+
+procedure TEchoClient.EchoThreadRoutine(a: TMethodThread);
+  procedure Tick;
+  var
+    m: TMemoryStream;
+  begin
+    m := Client.Incoming.Pop;
+    if m <> nil then
+      Client.Outgoing.Push(m);
+  end;
+
+begin
+  while not a.Terminated do
+  begin
+    Tick;
+  end;
+  Tick;
+end;
+
+constructor TEchoClient.Create;
+begin
+  inherited Create;
+  Client := TClient.Create;
+end;
+
+procedure TEchoClient.Start;
+begin
+  Client.Start;
+  EchoThread := TMethodThread.Create(@EchoThreadRoutine);
+end;
+
+procedure TEchoClient.Stop;
+begin
+  if EchoThread <> nil then
+  begin
+    EchoThread.Terminate;
+    EchoThread.WaitFor;
+    EchoThread.Free;
+    EchoThread := nil;
+  end;
+  Client.Stop;
+end;
+
+destructor TEchoClient.Destroy;
+begin
+  inherited Destroy;
 end;
 
 procedure TClient.ReaderRoutine(aThread: TMethodThread);
@@ -272,8 +349,28 @@ end;
 
 procedure TClient.Start;
 begin
-  ReaderThread := TMethodThread.Create(@ReaderRoutine);
-  WriterThread := TMethodThread.Create(@WriterRoutine);
+  if nil = ReaderThread then
+    ReaderThread := TMethodThread.Create(@ReaderRoutine);
+  if nil = WriterThread then
+    WriterThread := TMethodThread.Create(@WriterRoutine);
+end;
+
+procedure TClient.Stop;
+begin
+  if WriterThread <> nil then
+  begin
+    WriterThread.Terminate;
+    WriterThread.WaitFor;
+    WriterThread.Free;
+    WriterThread := nil;
+  end;
+  if ReaderThread <> nil then
+  begin
+    ReaderThread.Terminate;
+    ReaderThread.WaitFor;
+    ReaderThread.Free;
+    ReaderThread := nil;
+  end;
 end;
 
 procedure TClient.Push(aMessage: TMemoryStream);
@@ -288,18 +385,7 @@ end;
 
 destructor TClient.Destroy;
 begin
-  if WriterThread <> nil then
-  begin
-    WriterThread.Terminate;
-    WriterThread.WaitFor;
-    WriterThread.Free;
-  end;
-  if ReaderThread <> nil then
-  begin
-    ReaderThread.Terminate;
-    ReaderThread.WaitFor;
-    ReaderThread.Free;
-  end;
+  Stop;
   Outgoing.Free;
   Incoming.Free;
   MessageReceiver.Free;
