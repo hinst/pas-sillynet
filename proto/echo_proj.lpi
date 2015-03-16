@@ -52,7 +52,7 @@
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
       <OtherUnitFiles Value="..\src;..\third\synapse40\source\lib"/>
-      <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
+      <UnitOutputDirectory Value="compiled-units\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
   </CompilerOptions>
   <Debugging>
