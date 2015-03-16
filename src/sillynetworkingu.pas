@@ -57,13 +57,11 @@ type
     ExpectedSizeDataPosition: Byte;
     ExpectedSizeData: TInt64MemoryBlock;
     ExpectedSize: Int64;
-    MemoryF: TMemoryStream;
   public
+    Memory: TMemoryStream;
     constructor Create;
     procedure Write(aByte: byte);
     function Ready: Boolean;
-    procedure Reset;
-    property Memory: TMemoryStream read MemoryF;
     destructor Destroy; override;
   end;
 
@@ -163,7 +161,9 @@ procedure TClient.ReaderRoutine(aThread: TMethodThread);
       incomingMessage: TMemoryStream;
     begin
       incomingMessage := MessageReceiver.Memory;
-      MessageReceiver.Reset;
+      MessageReceiver.Memory := nil;
+      MessageReceiver.Free;
+      MessageReceiver := TMessageReceiver.Create;
       pushResult := Incoming.Push(incomingMessage);
       if not pushResult then
         incomingMessage.Free;
@@ -367,7 +367,7 @@ end;
 constructor TMessageReceiver.Create;
 begin
   inherited Create;
-  MemoryF := TMemoryStream.Create;
+  Memory := TMemoryStream.Create;
 end;
 
 procedure TMessageReceiver.Write(aByte: byte);
@@ -380,23 +380,17 @@ begin
       ExpectedSize := MemoryBlockToInt64(ExpectedSizeData);
   end
   else
-    MemoryF.WriteByte(aByte);
+    Memory.WriteByte(aByte);
 end;
 
 function TMessageReceiver.Ready: Boolean;
 begin
-  result := (ExpectedSizeDataPosition = SizeOf(ExpectedSize)) and (MemoryF.Size <= ExpectedSize);
-end;
-
-procedure TMessageReceiver.Reset;
-begin
-  ExpectedSizeDataPosition := 0;
-  MemoryF := TMemoryStream.Create;
+  result := (ExpectedSizeDataPosition = SizeOf(ExpectedSize)) and (ExpectedSize = Memory.Size);
 end;
 
 destructor TMessageReceiver.Destroy;
 begin
-  MemoryF.Free;
+  Memory.Free;
   inherited Destroy;
 end;
 
