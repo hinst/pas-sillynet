@@ -54,15 +54,16 @@ type
   TInt64MemoryBlock = array[0..7] of byte;
 
   TMessageReceiver = class
-  private
+  strict private
     ExpectedSizeDataPosition: Byte;
     ExpectedSizeData: TInt64MemoryBlock;
     ExpectedSize: Int64;
-  public
     Memory: TMemoryStream;
+    function Ready: Boolean;
+  public
     constructor Create;
     procedure Write(aByte: byte);
-    function Ready: Boolean;
+    function Extract: TMemoryStream;
     destructor Destroy; override;
   end;
 
@@ -338,18 +339,18 @@ procedure TClient.ReaderRoutine(aThread: TMethodThread);
     end;
 
     // MessageReceiver.Ready must be = True.
-    procedure ExtractMessage;
+    procedure TryExtractMessage;
     var
       pushResult: Boolean;
       incomingMessage: TMemoryStream;
     begin
-      incomingMessage := MessageReceiver.Memory;
-      MessageReceiver.Memory := nil;
-      MessageReceiver.Free;
-      MessageReceiver := TMessageReceiver.Create;
-      pushResult := Incoming.Push(incomingMessage);
-      if not pushResult then
-        incomingMessage.Free;
+      incomingMessage := MessageReceiver.Extract;
+      if incomingMessage <> nil then
+      begin
+        pushResult := Incoming.Push(incomingMessage);
+        if not pushResult then
+          incomingMessage.Free;
+      end;
     end;
 
   var
@@ -358,8 +359,7 @@ procedure TClient.ReaderRoutine(aThread: TMethodThread);
     while ConnectionActive and Read(byteL) do
     begin
       MessageReceiver.Write(byteL);
-      if MessageReceiver.Ready then
-        ExtractMessage;
+      TryExtractMessage;
       ConnectionActiveF := CheckConnectionActive;
       if not ConnectionActiveF then
       begin
@@ -582,6 +582,7 @@ constructor TMessageReceiver.Create;
 begin
   inherited Create;
   Memory := TMemoryStream.Create;
+  Memory.Size := DefaultMessageBufferLimit;
 end;
 
 procedure TMessageReceiver.Write(aByte: byte);
@@ -600,6 +601,20 @@ end;
 function TMessageReceiver.Ready: Boolean;
 begin
   result := (ExpectedSizeDataPosition = SizeOf(ExpectedSize)) and (ExpectedSize = Memory.Size);
+end;
+
+function TMessageReceiver.Extract: TMemoryStream;
+begin
+  if Ready then
+  begin
+    result := TMemoryStream.Create;
+    result.Size := Memory.Position;
+    Memory.Position := 0;
+    result.CopyFrom(Memory, result.Size);
+    Memory.Position := 0;
+  end
+  else
+    result := nil;
 end;
 
 destructor TMessageReceiver.Destroy;
