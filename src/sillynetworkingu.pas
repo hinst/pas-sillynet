@@ -5,7 +5,8 @@ unit SillyNetworkingU;
 interface
 
 uses
-  Classes, windows, SysUtils, blcksock, synsock;
+  Classes, windows, SysUtils,
+  blcksock, synsock;
 
 type
 
@@ -91,6 +92,7 @@ type
     procedure ReaderRoutine(aThread: TMethodThread);
     procedure WriterRoutine(aThread: TMethodThread);
     function CheckConnectionActive: Boolean;
+    procedure WriteLog(aMessage: string);
   public
     TargetAddress: string;
     TargetPort: Word;
@@ -126,6 +128,10 @@ const
   DefaultThreadIdleInterval = 100;
   DefaultKeepAliveInterval = 3000;
 
+var
+  LogFileLocation: string;
+  LogFile: TStream;
+
 implementation
 
 function Int64ToMemoryBlock(aX: Int64): TInt64MemoryBlock;
@@ -145,6 +151,29 @@ begin
   result := 0;
   for i := 0 to SizeOf(result) - 1 do
     result := result + (aBlock[i] shl (i * 8));
+end;
+
+function GetDefaultLogFileLocation: string;
+var
+  currentMoment: TDateTime;
+begin
+  currentMoment := Now;
+  result := 'silly_networking_log_'
+    + FormatDateTime('yyyy-mm-dd_hh-nn-ss', currentMoment) + '.txt';
+end;
+
+procedure WriteLog(text: string);
+
+  procedure CreateLogFile;
+  begin
+    LogFile := TFileStream.Create(GetDefaultLogFileLocation, fmCreate or fmOpenWrite);
+  end;
+
+begin
+  text := IntToHex(GetCurrentThreadId, 8) + ': ' + text + LineEnding;
+  if nil = LogFile then
+    CreateLogFile;
+  LogFile.Write(text[1], Length(text));
 end;
 
 { TEchoClient }
@@ -256,7 +285,9 @@ procedure TClient.ReaderRoutine(aThread: TMethodThread);
         ExtractMessage;
       ConnectionActiveF := CheckConnectionActive;
       if not ConnectionActiveF then
+      begin
         Socket.CloseSocket;
+      end;
     end;
   end;
 
@@ -265,7 +296,8 @@ begin
   begin
     if not ConnectionActive then
       ConnectForward;
-    ReadForward;
+    if ConnectionActive then
+      ReadForward;
     SysUtils.Sleep(ThreadIdleInterval);
   end;
   ReadForward;
@@ -335,6 +367,11 @@ end;
 function TClient.CheckConnectionActive: Boolean;
 begin
   result := (Socket.LastError = 0) or (Socket.LastError = WSAETIMEDOUT);
+end;
+
+procedure TClient.WriteLog(aMessage: string);
+begin
+  SillyNetworkingU.WriteLog('TClient: ' + aMessage);
 end;
 
 constructor TClient.Create;
