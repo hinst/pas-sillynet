@@ -5,7 +5,7 @@ unit SillyNetworkingU;
 interface
 
 uses
-  Classes, windows, SysUtils,
+  types, Classes, windows, sysutils,
   blcksock, synsock;
 
 type
@@ -73,10 +73,12 @@ type
   TMethodThread = class(TThread)
   private
     Method: TMethodThreadMethod;
+  protected
+    procedure Execute; override;
+    procedure WriteLog(s: string);
   public
     property Terminated;
     constructor Create(aMethod: TMethodThreadMethod);
-    procedure Execute; override;
   end;
 
   TClient = class
@@ -127,12 +129,51 @@ const
   DefaultMessageBufferLimit = 10 * 1000;
   DefaultThreadIdleInterval = 100;
   DefaultKeepAliveInterval = 3000;
+  DefaultDateTimeFormat = 'yyyy-mm-dd_hh-nn-ss';
 
 var
   LogFileLocation: string;
-  LogFile: TStream;
+  LogFileHandle: THandle;
+
+procedure Initialize;
+procedure Finalize;
 
 implementation
+
+function ExceptionCallStackToStrings: TStringDynArray;
+var
+  i: Integer;
+  frames: PPointer;
+begin
+  SetLength(result, 1 + ExceptFrameCount);
+  frames := ExceptFrames;
+  result[0] := BackTraceStrFunc(ExceptAddr);
+  for i := 0 to ExceptFrameCount - 1 do
+    result[i + 1] := BackTraceStrFunc(frames[i]);
+end;
+
+function JoinStringArray(aStringArray: TStringDynArray; aSeparator: string): string;
+var
+  i: Integer;
+begin
+  result := '';
+  for i := 0 to Length(aStringArray) - 1 do
+  begin
+    result := result + aStringArray[i];
+    if i < Length(aStringArray) - 1 then
+      result := result + aSeparator;
+  end;
+end;
+
+function ExceptionCallStackToText: string;
+begin
+  result := JoinStringArray(ExceptionCallStackToStrings, LineEnding);
+end;
+
+function ExceptionToText(e: Exception): string;
+begin
+  result := e.ClassName + ': "' + e.Message + '"' + LineEnding + ExceptionCallStackToText;
+end;
 
 function Int64ToMemoryBlock(aX: Int64): TInt64MemoryBlock;
 var
@@ -162,18 +203,38 @@ begin
     + FormatDateTime('yyyy-mm-dd_hh-nn-ss', currentMoment) + '.txt';
 end;
 
-procedure WriteLog(text: string);
-
-  procedure CreateLogFile;
-  begin
-    LogFile := TFileStream.Create(GetDefaultLogFileLocation, fmCreate or fmOpenWrite);
-  end;
-
+procedure CreateLogFile;
 begin
-  text := IntToHex(GetCurrentThreadId, 8) + ': ' + text + LineEnding;
-  if nil = LogFile then
-    CreateLogFile;
-  LogFile.Write(text[1], Length(text));
+  LogFileHandle := CreateFile(PChar(GetDefaultLogFileLocation),
+    GENERIC_WRITE, FILE_SHARE_READ, nil, CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,0);
+end;
+
+procedure WriteLog(text: string);
+var
+  writeResult: DWORD;
+begin
+  text := FormatDateTime(DefaultDateTimeFormat, Now) + ' ' + IntToHex(GetCurrentThreadId, 8) + ': '
+    + text + LineEnding;
+  writeResult := 0;
+  WriteFile(LogFileHandle, text[1], Length(text), writeResult, nil);
+end;
+
+procedure CloseLogFile;
+begin
+  CloseHandle(LogFileHandle);
+  LogFileHandle := 0;
+end;
+
+procedure Initialize;
+begin
+  CreateLogFile;
+  WriteLog('Log file created');
+end;
+
+procedure Finalize;
+begin
+  WriteLog('Closing log file');
+  CloseLogFile;
 end;
 
 { TEchoClient }
@@ -243,11 +304,16 @@ procedure TClient.ReaderRoutine(aThread: TMethodThread);
     begin
       Socket.Connect(TargetAddress, IntToStr(TargetPort));
       if Socket.LastError = 0 then
-        ConnectionActiveF := True
+      begin
+        ConnectionActiveF := True;
+        WriteLog('Connected');
+      end
       else
       begin
         Socket.CloseSocket;
         ConnectionActiveF := False;
+        WriteLog('Tried to connect; failed; Socket.LastError = ' + IntToStr(Socket.LastError)
+          +', Socket.LastErrorDesc = "' + Socket.LastErrorDesc + '"');
       end;
     end;
   end;
@@ -292,6 +358,7 @@ procedure TClient.ReaderRoutine(aThread: TMethodThread);
   end;
 
 begin
+  WriteLog('Reader routine started');
   while not aThread.Terminated do
   begin
     if not ConnectionActive then
@@ -382,6 +449,7 @@ begin
   MessageReceiver := TMessageReceiver.Create;
   Incoming := TMessageQueue.Create(DefaultMessageBufferLimit);
   Outgoing := TMessageQueue.Create(DefaultMessageBufferLimit);
+  Socket := TTCPBlockSocket.Create;
 end;
 
 procedure TClient.Start;
@@ -408,6 +476,7 @@ begin
     ReaderThread.Free;
     ReaderThread := nil;
   end;
+  Socket.CloseSocket;
 end;
 
 procedure TClient.Push(aMessage: TMemoryStream);
@@ -426,6 +495,7 @@ begin
   Outgoing.Free;
   Incoming.Free;
   MessageReceiver.Free;
+  Socket.Free;
   inherited Destroy;
 end;
 
@@ -438,7 +508,17 @@ end;
 
 procedure TMethodThread.Execute;
 begin
-  Method(self);
+  try
+    Method(self);
+  except
+    on e: Exception do
+      WriteLog('Exception in thread ' + ExceptionToText(e));
+  end;
+end;
+
+procedure TMethodThread.WriteLog(s: string);
+begin
+  SillyNetworkingU.WriteLog(self.ClassName + ': ' + s)
 end;
 
 procedure TMessageQueue.Shrink1;

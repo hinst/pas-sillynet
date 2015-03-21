@@ -7,6 +7,7 @@ var
   client: TClient;
 
 begin
+  SillyNetworkingU.Initialize;
   commandString := '';
   client := TClient.Create;
   client.TargetAddress := 'localhost';
@@ -27,5 +28,6 @@ begin
     end
   end;
   client.Free;
+  SillyNetworkingU.Finalize;
 end.
 
