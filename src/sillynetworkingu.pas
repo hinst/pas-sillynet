@@ -60,6 +60,7 @@ type
     ExpectedSize: Int64;
     Memory: TMemoryStream;
     function Ready: Boolean;
+    procedure Clear;
   public
     constructor Create;
     procedure Write(aByte: byte);
@@ -603,6 +604,12 @@ begin
   result := (ExpectedSizeDataPosition = SizeOf(ExpectedSize)) and (ExpectedSize = Memory.Size);
 end;
 
+procedure TMessageReceiver.Clear;
+begin
+  Memory.Position := 0;
+  ExpectedSizeDataPosition := 0;
+end;
+
 function TMessageReceiver.Extract: TMemoryStream;
 begin
   if Ready then
@@ -611,7 +618,7 @@ begin
     result.Size := Memory.Position;
     Memory.Position := 0;
     result.CopyFrom(Memory, result.Size);
-    Memory.Position := 0;
+    Clear;
   end
   else
     result := nil;
