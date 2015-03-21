@@ -140,6 +140,7 @@ procedure Finalize;
 
 implementation
 
+{$REGION EXCEPTION}
 function ExceptionCallStackToStrings: TStringDynArray;
 var
   i: Integer;
@@ -175,6 +176,10 @@ begin
   result := e.ClassName + ': "' + e.Message + '"' + LineEnding + ExceptionCallStackToText;
 end;
 
+{$ENDREGION}
+
+{$REGION INT_64_MEMBLOCK}
+
 function Int64ToMemoryBlock(aX: Int64): TInt64MemoryBlock;
 var
   i: Byte;
@@ -193,6 +198,10 @@ begin
   for i := 0 to SizeOf(result) - 1 do
     result := result + (aBlock[i] shl (i * 8));
 end;
+
+{$ENDREGION}
+
+{$REGION LOG}
 
 function GetDefaultLogFileLocation: string;
 var
@@ -224,6 +233,8 @@ begin
   CloseHandle(LogFileHandle);
   LogFileHandle := 0;
 end;
+
+{$ENDREGION}
 
 procedure Initialize;
 begin
