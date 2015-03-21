@@ -4,12 +4,12 @@ uses SillyNetworkingU;
 
 var
   commandString: string;
-  client: TClient;
+  client: TEchoClient;
 
 begin
   SillyNetworkingU.Initialize;
   commandString := '';
-  client := TClient.Create;
+  client := TEchoClient.Create;
   client.TargetAddress := 'localhost';
   client.TargetPort := 9077;
   while commandString <> 'exit' do
