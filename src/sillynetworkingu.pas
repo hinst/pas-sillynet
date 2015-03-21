@@ -318,13 +318,13 @@ procedure TClient.ReaderRoutine(aThread: TMethodThread);
     end;
   end;
 
-  function Read(out aByte: Byte): Boolean;
-  begin
-    aByte := self.Socket.RecvByte(1);
-    result := self.Socket.LastError = 0;
-  end;
-
   procedure ReadForward;
+
+    function Read(out aByte: Byte): Boolean;
+    begin
+      aByte := self.Socket.RecvByte(1);
+      result := self.Socket.LastError = 0;
+    end;
 
     // MessageReceiver.Ready must be = True.
     procedure ExtractMessage;
