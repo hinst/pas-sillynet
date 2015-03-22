@@ -263,6 +263,7 @@ begin
 end;
 
 procedure TEchoClient.EchoThreadRoutine(a: TMethodThread);
+
   procedure Tick;
   var
     m: TMemoryStream;
@@ -276,6 +277,7 @@ begin
   while not a.Terminated do
   begin
     Tick;
+    Sleep(100);
   end;
   Tick;
 end;
