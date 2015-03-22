@@ -13,6 +13,7 @@ begin
   client.TargetAddress := 'localhost';
   client.TargetPort := 9077;
   client.ThreadIdleInterval := 5;
+  client.Start;
   while commandString <> 'exit' do
   begin
     Write('>');

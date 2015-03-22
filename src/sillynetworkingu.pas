@@ -399,7 +399,9 @@ begin
     if not ConnectionActive then
       ConnectForward;
     if ConnectionActive then
-      ReadForward;
+      ReadForward
+    else
+      SysUtils.Sleep(1000); // failed to connect; do not attempt to connect again right away.
     SysUtils.Sleep(0);
   end;
   ReadForward;
