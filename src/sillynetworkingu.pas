@@ -399,9 +399,7 @@ var
       end;
       ConnectionActiveF := CheckConnectionActive;
       if not ConnectionActiveF then
-      begin
         Socket.CloseSocket;
-      end;
     end;
   end;
 
@@ -415,7 +413,6 @@ begin
       ReadForward
     else
       SysUtils.Sleep(1000); // failed to connect; do not attempt to connect again right away.
-    SysUtils.Sleep(0);
   end;
   ReadForward;
 end;
