@@ -195,10 +195,14 @@ end;
 function MemoryBlockToInt64(aBlock: TInt64MemoryBlock): Int64;
 var
   i: Byte;
+  currentValue: Int64;
 begin
   result := 0;
   for i := 0 to SizeOf(result) - 1 do
-    result := result + (aBlock[i] shl (i * 8));
+  begin
+    currentValue := aBlock[i];
+    result := result or (currentValue shl (i * 8));
+  end;
 end;
 
 {$ENDREGION}
@@ -321,14 +325,16 @@ procedure TClient.ReaderRoutine(aThread: TMethodThread);
       if Socket.LastError = 0 then
       begin
         ConnectionActiveF := True;
-        WriteLog('Connected');
+        WriteLog('Successfully connected to address "' + TargetAddress + '" '
+          + 'port ' + IntToStr(TargetPort));
       end
       else
       begin
         Socket.CloseSocket;
         ConnectionActiveF := False;
-        WriteLog('Tried to connect; failed; Socket.LastError = ' + IntToStr(Socket.LastError)
-          +', Socket.LastErrorDesc = "' + Socket.LastErrorDesc + '"');
+        WriteLog('Tried to connect; failed; Socket.LastError = ' + IntToStr(Socket.LastError) + ', '
+          + 'Socket.LastErrorDesc = "' + Socket.LastErrorDesc + '"; '
+          + 'target address is "' + TargetAddress + '", port ' + IntToStr(TargetPort));
       end;
     end;
   end;
@@ -372,7 +378,6 @@ procedure TClient.ReaderRoutine(aThread: TMethodThread);
   end;
 
 begin
-  WriteLog('Reader routine started');
   while not aThread.Terminated do
   begin
     if not ConnectionActive then
@@ -596,7 +601,9 @@ begin
     ExpectedSizeData[ExpectedSizeDataPosition] := aByte;
     Inc(ExpectedSizeDataPosition);
     if ExpectedSizeDataPosition = SizeOf(ExpectedSize) then
+    begin
       ExpectedSize := MemoryBlockToInt64(ExpectedSizeData);
+    end;
   end
   else
     Memory.WriteByte(aByte);
@@ -604,7 +611,7 @@ end;
 
 function TMessageReceiver.Ready: Boolean;
 begin
-  result := (ExpectedSizeDataPosition = SizeOf(ExpectedSize)) and (ExpectedSize = Memory.Size);
+  result := (ExpectedSizeDataPosition = SizeOf(ExpectedSize)) and (ExpectedSize = Memory.Position);
 end;
 
 procedure TMessageReceiver.Clear;
