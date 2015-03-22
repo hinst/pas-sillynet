@@ -59,11 +59,12 @@ type
     ExpectedSizeData: TInt64MemoryBlock;
     ExpectedSize: Int64;
     Memory: TMemoryStream;
+    TempMemory: TMemoryStream;
     function Ready: Boolean;
-    procedure Clear;
+    procedure ShiftLeft(aRightPosition: Int64);
   public
     constructor Create;
-    procedure Write(aByte: byte);
+    procedure Write(const aBuffer: PByte; const aLength: Integer);
     function Extract: TMemoryStream;
     destructor Destroy; override;
   end;
@@ -138,6 +139,7 @@ const
   DefaultThreadIdleInterval = 100;
   DefaultKeepAliveInterval = 3000;
   DefaultDateTimeFormat = 'yyyy-mm-dd_hh-nn-ss';
+  DefaultRecvBufferLength = 16;
 
 var
   LogFileLocation: string;
@@ -331,6 +333,8 @@ begin
 end;
 
 procedure TClient.ReaderRoutine(aThread: TMethodThread);
+var
+  buffer: TByteDynArray;
 
   procedure ConnectForward;
   begin
@@ -356,10 +360,9 @@ procedure TClient.ReaderRoutine(aThread: TMethodThread);
 
   procedure ReadForward;
 
-    function Read(out aByte: Byte): Boolean;
+    function ReadBuffer: Integer;
     begin
-      aByte := self.Socket.RecvByte(100);
-      result := self.Socket.LastError = 0;
+      result := self.Socket.RecvBufferEx(@buffer[0], Length(buffer), 100);
     end;
 
     procedure TryExtractMessage;
@@ -379,12 +382,21 @@ procedure TClient.ReaderRoutine(aThread: TMethodThread);
     end;
 
   var
-    byteL: Byte;
+    incomingDataLength: Integer;
   begin
-    while ConnectionActive and Read(byteL) do
+    while ConnectionActive do
     begin
-      MessageReceiver.Write(byteL);
-      TryExtractMessage;
+      while True do
+      begin
+        incomingDataLength := ReadBuffer;
+        if incomingDataLength > 0 then
+        begin
+          MessageReceiver.Write(@buffer[0], incomingDataLength);
+          TryExtractMessage;
+        end
+        else
+          break;
+      end;
       ConnectionActiveF := CheckConnectionActive;
       if not ConnectionActiveF then
       begin
@@ -394,6 +406,7 @@ procedure TClient.ReaderRoutine(aThread: TMethodThread);
   end;
 
 begin
+  SetLength(buffer, DefaultRecvBufferLength);
   while not aThread.Terminated do
   begin
     if not ConnectionActive then
@@ -616,39 +629,58 @@ begin
   Memory := TMemoryStream.Create;
   Memory.Size := DefaultMessageBufferLimit;
   Memory.Position := 0;
+  TempMemory := TMemoryStream.Create;
+  TempMemory.Size := DefaultMessageBufferLimit;
+  TempMemory.Position := 0;
 end;
 
-procedure TMessageReceiver.Write(aByte: byte);
+procedure TMessageReceiver.Write(const aBuffer: PByte; const aLength: Integer);
+var
+  offset: Integer;
 begin
-  if ExpectedSizeDataPosition < SizeOf(ExpectedSize) then
+  offset := 0;
+  while (ExpectedSizeDataPosition < SizeOf(ExpectedSize)) and (offset < aLength) do
   begin
-    ExpectedSizeData[ExpectedSizeDataPosition] := aByte;
+    ExpectedSizeData[ExpectedSizeDataPosition] := aBuffer[offset];
     Inc(ExpectedSizeDataPosition);
+    Inc(offset);
     if ExpectedSizeDataPosition = SizeOf(ExpectedSize) then
-    begin
       ExpectedSize := MemoryBlockToInt64(ExpectedSizeData);
-    end;
-  end
-  else
-    Memory.WriteByte(aByte);
+  end;
+  if offset < aLength then
+    Memory.Write(aBuffer[offset], aLength - offset);
 end;
 
 function TMessageReceiver.Ready: Boolean;
 begin
-  result := (ExpectedSizeDataPosition = SizeOf(ExpectedSize)) and (ExpectedSize = Memory.Position);
+  result := (ExpectedSizeDataPosition = SizeOf(ExpectedSize)) and (ExpectedSize <= Memory.Position);
 end;
 
-procedure TMessageReceiver.Clear;
+procedure TMessageReceiver.ShiftLeft(aRightPosition: Int64);
+var
+  leftOverLength: Int64;
 begin
-  Memory.Position := 0;
+  leftOverLength := aRightPosition - ExpectedSize;
   ExpectedSizeDataPosition := 0;
+  Memory.Position := 0;
+  if leftOverLength > 0 then
+  begin
+    Memory.Position := ExpectedSize;
+    TempMemory.Position := 0;
+    TempMemory.CopyFrom(Memory, leftOverLength);
+    Memory.Position := 0;
+    Write(PByte(TempMemory.Memory), leftOverLength);
+  end;
 end;
 
 // Beware: TStream.CopyFrom copies everything when specifying length = 0.
 function TMessageReceiver.Extract: TMemoryStream;
+var
+  rightPosition: Int64;
 begin
   if Ready then
   begin
+    rightPosition := Memory.Position;
     result := TMemoryStream.Create;
     WriteLog(IntToStr(ExpectedSize));
     if ExpectedSize > 0 then
@@ -658,7 +690,7 @@ begin
       Memory.Position := 0;
       result.CopyFrom(Memory, result.Size);
     end;
-    Clear;
+    ShiftLeft(rightPosition);
   end
   else
     result := nil;
@@ -667,6 +699,7 @@ end;
 destructor TMessageReceiver.Destroy;
 begin
   Memory.Free;
+  TempMemory.Free;
   inherited Destroy;
 end;
 
