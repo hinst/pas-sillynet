@@ -136,10 +136,10 @@ type
 
 const
   DefaultMessageBufferLimit = 10 * 1000;
-  DefaultThreadIdleInterval = 100;
+  DefaultThreadIdleInterval = 10;
   DefaultKeepAliveInterval = 3000;
   DefaultDateTimeFormat = 'yyyy-mm-dd_hh-nn-ss';
-  DefaultRecvBufferLength = 16;
+  DefaultRecvBufferLength = 1;
 
 var
   LogFileLocation: string;
@@ -362,22 +362,23 @@ var
 
     function ReadBuffer: Integer;
     begin
-      result := self.Socket.RecvBufferEx(@buffer[0], Length(buffer), 100);
+      result := self.Socket.RecvBufferEx(@buffer[0], Length(buffer), 1);
     end;
 
-    procedure TryExtractMessage;
+    procedure TryExtractMessages;
     var
       pushResult: Boolean;
       incomingMessage: TMemoryStream;
     begin
       incomingMessage := MessageReceiver.Extract;
-      if incomingMessage <> nil then
+      while incomingMessage <> nil do
       begin
         pushResult := Incoming.Push(incomingMessage);
         if IncomingMessageEvent <> nil then
           IncomingMessageEvent.SetEvent;
         if not pushResult then
           incomingMessage.Free;
+        incomingMessage := MessageReceiver.Extract;
       end;
     end;
 
@@ -392,7 +393,7 @@ var
         if incomingDataLength > 0 then
         begin
           MessageReceiver.Write(@buffer[0], incomingDataLength);
-          TryExtractMessage;
+          TryExtractMessages;
         end
         else
           break;
@@ -413,6 +414,7 @@ begin
       ReadForward
     else
       SysUtils.Sleep(1000); // failed to connect; do not attempt to connect again right away.
+    SysUtils.Sleep(ThreadIdleInterval);
   end;
   ReadForward;
 end;
