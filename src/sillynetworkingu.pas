@@ -5,7 +5,7 @@ unit SillyNetworkingU;
 interface
 
 uses
-  types, Classes, windows, sysutils,
+  types, Classes, windows, sysutils, syncobjs,
   blcksock, synsock;
 
 type
@@ -93,6 +93,7 @@ type
     WriterThread: TMethodThread;
     ConnectionActiveF: Boolean;
     KeepAliveInterval: Cardinal;
+    PushEvent: TEvent;
     procedure ReaderRoutine(aThread: TMethodThread);
     procedure WriterRoutine(aThread: TMethodThread);
     function CheckConnectionActive: Boolean;
@@ -100,7 +101,7 @@ type
   public
     TargetAddress: string;
     TargetPort: Word;
-    ThreadIdleInterval: Integer;
+    ThreadIdleInterval: DWord;
     property ConnectionActive: Boolean read ConnectionActiveF;
     constructor Create;
     procedure Start;
@@ -117,10 +118,12 @@ type
     EchoThread: TMethodThread;
     procedure SetTargetAddress(a: string);
     procedure SetTargetPort(a: Word);
+    procedure SetThreadIdleInterval(a: DWord);
     procedure EchoThreadRoutine(a: TMethodThread);
   public
     property TargetAddress: string write SetTargetAddress;
     property TargetPort: Word write SetTargetPort;
+    property ThreadIdleInterval: DWORD write SetThreadIdleInterval;
     constructor Create;
     procedure Start;
     procedure Stop;
@@ -266,6 +269,11 @@ begin
   Client.TargetPort := a;
 end;
 
+procedure TEchoClient.SetThreadIdleInterval(a: DWord);
+begin
+  Client.ThreadIdleInterval := a;
+end;
+
 procedure TEchoClient.EchoThreadRoutine(a: TMethodThread);
 
   procedure Tick;
@@ -281,7 +289,7 @@ begin
   while not a.Terminated do
   begin
     Tick;
-    Sleep(100);
+    Sleep(10);
   end;
   Tick;
 end;
@@ -343,7 +351,7 @@ procedure TClient.ReaderRoutine(aThread: TMethodThread);
 
     function Read(out aByte: Byte): Boolean;
     begin
-      aByte := self.Socket.RecvByte(1);
+      aByte := self.Socket.RecvByte(100);
       result := self.Socket.LastError = 0;
     end;
 
@@ -445,7 +453,7 @@ begin
   while not aThread.Terminated do
   begin
     WriteForward;
-    SysUtils.Sleep(ThreadIdleInterval);
+    PushEvent.WaitFor(ThreadIdleInterval);
   end;
   WriteForward;
 end;
@@ -467,6 +475,7 @@ begin
   ThreadIdleInterval := DefaultThreadIdleInterval;
   MessageReceiver := TMessageReceiver.Create;
   Incoming := TMessageQueue.Create(DefaultMessageBufferLimit);
+  PushEvent := TEvent.Create(nil, false, false, '');
   Outgoing := TMessageQueue.Create(DefaultMessageBufferLimit);
   Socket := TTCPBlockSocket.Create;
 end;
@@ -502,6 +511,7 @@ end;
 procedure TClient.Push(aMessage: TMemoryStream);
 begin
   Outgoing.Push(aMessage);
+  PushEvent.SetEvent;
 end;
 
 function TClient.Pop: TMemoryStream;
@@ -513,6 +523,7 @@ destructor TClient.Destroy;
 begin
   Stop;
   Outgoing.Free;
+  PushEvent.Free;;
   Incoming.Free;
   MessageReceiver.Free;
   Socket.Free;
