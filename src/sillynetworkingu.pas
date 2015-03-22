@@ -489,6 +489,7 @@ begin
     ReaderThread := nil;
   end;
   Socket.CloseSocket;
+  ConnectionActiveF := False;
 end;
 
 procedure TClient.Push(aMessage: TMemoryStream);
