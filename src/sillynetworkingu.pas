@@ -99,6 +99,8 @@ type
     function CheckConnectionActive: Boolean;
     procedure WriteLog(aMessage: string);
   public
+    // Pluggable.
+    IncomingMessageEvent: TEvent;
     TargetAddress: string;
     TargetPort: Word;
     ThreadIdleInterval: DWord;
@@ -116,6 +118,7 @@ type
   private
     Client: TClient;
     EchoThread: TMethodThread;
+    EchoThreadEvent: TEvent;
     procedure SetTargetAddress(a: string);
     procedure SetTargetPort(a: Word);
     procedure SetThreadIdleInterval(a: DWord);
@@ -289,7 +292,7 @@ begin
   while not a.Terminated do
   begin
     Tick;
-    Sleep(10);
+    EchoThreadEvent.WaitFor(5);
   end;
   Tick;
 end;
@@ -298,6 +301,8 @@ constructor TEchoClient.Create;
 begin
   inherited Create;
   Client := TClient.Create;
+  EchoThreadEvent := TEvent.Create(nil, false, false, '');
+  Client.IncomingMessageEvent := EchoThreadEvent;
 end;
 
 procedure TEchoClient.Start;
@@ -311,6 +316,7 @@ begin
   if EchoThread <> nil then
   begin
     EchoThread.Terminate;
+    EchoThreadEvent.SetEvent;
     EchoThread.WaitFor;
     EchoThread.Free;
     EchoThread := nil;
@@ -320,6 +326,7 @@ end;
 
 destructor TEchoClient.Destroy;
 begin
+  Stop;
   inherited Destroy;
 end;
 
@@ -355,7 +362,6 @@ procedure TClient.ReaderRoutine(aThread: TMethodThread);
       result := self.Socket.LastError = 0;
     end;
 
-    // MessageReceiver.Ready must be = True.
     procedure TryExtractMessage;
     var
       pushResult: Boolean;
@@ -365,6 +371,8 @@ procedure TClient.ReaderRoutine(aThread: TMethodThread);
       if incomingMessage <> nil then
       begin
         pushResult := Incoming.Push(incomingMessage);
+        if IncomingMessageEvent <> nil then
+          IncomingMessageEvent.SetEvent;
         if not pushResult then
           incomingMessage.Free;
       end;
@@ -392,7 +400,7 @@ begin
       ConnectForward;
     if ConnectionActive then
       ReadForward;
-    SysUtils.Sleep(ThreadIdleInterval);
+    SysUtils.Sleep(0);
   end;
   ReadForward;
 end;
@@ -407,8 +415,10 @@ var
     sizeData: TInt64MemoryBlock;
   begin
     sizeData := Int64ToMemoryBlock(aMessage.Size);
+    WriteLog('WriteMessage: ' + IntToStr(aMessage.Size));
     Socket.SendBuffer(@sizeData[0], SizeOf(Int64));
-    Socket.SendBuffer(aMessage.Memory, Integer(aMessage.Size));
+    if aMessage.Size > 0 then
+      Socket.SendBuffer(aMessage.Memory, Integer(aMessage.Size));
   end;
 
   procedure SendKeepAliive;
@@ -603,6 +613,7 @@ begin
   inherited Create;
   Memory := TMemoryStream.Create;
   Memory.Size := DefaultMessageBufferLimit;
+  Memory.Position := 0;
 end;
 
 procedure TMessageReceiver.Write(aByte: byte);
@@ -631,14 +642,20 @@ begin
   ExpectedSizeDataPosition := 0;
 end;
 
+// Beware: TStream.CopyFrom copies everything when specifying length = 0.
 function TMessageReceiver.Extract: TMemoryStream;
 begin
   if Ready then
   begin
     result := TMemoryStream.Create;
-    result.Size := Memory.Position;
-    Memory.Position := 0;
-    result.CopyFrom(Memory, result.Size);
+    WriteLog(IntToStr(ExpectedSize));
+    if ExpectedSize > 0 then
+    begin
+      result.Size := ExpectedSize;
+      result.Position := 0;
+      Memory.Position := 0;
+      result.CopyFrom(Memory, result.Size);
+    end;
     Clear;
   end
   else

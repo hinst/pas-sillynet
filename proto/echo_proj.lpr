@@ -12,7 +12,7 @@ begin
   client := TEchoClient.Create;
   client.TargetAddress := 'localhost';
   client.TargetPort := 9077;
-  client.ThreadIdleInterval := 10;
+  client.ThreadIdleInterval := 5;
   while commandString <> 'exit' do
   begin
     Write('>');
