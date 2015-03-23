@@ -414,7 +414,7 @@ begin
       ReadForward
     else
       SysUtils.Sleep(1000); // failed to connect; do not attempt to connect again right away.
-    SysUtils.Sleep(ThreadIdleInterval);
+    //SysUtils.Sleep(ThreadIdleInterval);
   end;
   ReadForward;
 end;
